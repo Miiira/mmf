@@ -4,6 +4,7 @@ import gc
 import logging
 import math
 import warnings
+
 from abc import ABC
 from typing import Any, Dict
 
@@ -25,7 +26,6 @@ class TrainerTrainingLoopMixin(ABC):
     def training_loop(self) -> None:
         self.max_updates = self._max_updates()
         torch.autograd.set_detect_anomaly(self.training_config.detect_anomaly)
-        logger.info(f"Training max updates: {self.max_updates}")
 
         logger.info("Starting training...")
         self.model.train()
@@ -97,8 +97,6 @@ class TrainerTrainingLoopMixin(ABC):
 
                 if should_break:
                     break
-
-        logger.info(f"Training done current epoch: {self.current_epoch}, max updates: {self.max_updates}, current update: {self.num_updates}")
 
     def run_training_batch(self, batch: Tensor) -> None:
         # Train batch start callbacks
