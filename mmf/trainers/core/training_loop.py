@@ -22,14 +22,9 @@ class TrainerTrainingLoopMixin(ABC):
     num_updates: int = 0
 
     def training_loop(self) -> None:
-        self.max_updates = self.training_config.max_updates
-        self.max_epochs = self.training_config.max_epochs
-        if self.max_epochs is None:
-            self.max_epochs = math.inf
-        else:
-            self.max_updates = math.inf
-
+        self.max_updates = self._max_updates()
         torch.autograd.set_detect_anomaly(self.training_config.detect_anomaly)
+        logger.info(f"Training max updates: {self.max_updates}")
 
         logger.info("Starting training...")
         self.model.train()
@@ -55,14 +50,12 @@ class TrainerTrainingLoopMixin(ABC):
     def run_training_epoch(self) -> None:
         should_break = False
         while self.num_updates < self.max_updates and not should_break:
-            self.current_epoch += 1
+            assert self.num_updates % len(self.train_loader) == 0
+            self.current_epoch = round(self.num_updates / len(self.train_loader))
             registry.register("current_epoch", self.current_epoch)
 
             # Seed the sampler in case if it is distributed
             self.dataset_loader.seed_sampler("train", self.current_epoch)
-
-            if self.current_epoch > self.max_epochs:
-                break
 
             for batch in self.train_loader:
                 self.profile("Batch load time")
@@ -97,11 +90,14 @@ class TrainerTrainingLoopMixin(ABC):
                     if stop is True:
                         logger.info("Early stopping activated")
                         should_break = True
-                if self.num_updates > self.max_updates:
+
+                if self.num_updates >= self.max_updates:
                     should_break = True
 
                 if should_break:
                     break
+
+        logger.info(f"Training done current epoch: {self.current_epoch}, max updates: {self.max_updates}, current update: {self.num_updates}")
 
     def run_training_batch(self, batch: Tensor) -> None:
         # Train batch start callbacks
@@ -152,3 +148,23 @@ class TrainerTrainingLoopMixin(ABC):
         loss_dict = report.losses
         loss = sum([loss.mean() for loss in loss_dict.values()])
         return loss
+
+    def _max_updates(self):
+        max_updates = self.training_config.max_updates
+        max_epochs = self.training_config.max_epochs
+        train_data_length = len(self.train_loader)
+
+        if max_epochs is not None and max_updates is not None:
+            max_updates = min(max_epochs * train_data_length, max_updates)
+        elif max_epochs is None and max_updates is None:
+            warnings.warn(f"Neither of max_updates nor max_epochs was specified. Setting them to math.inf.")
+            max_updates = math.inf
+        elif max_updates is None:
+            max_updates = max_epochs * train_data_length
+        else:
+            pass
+
+        if not isinstance(max_updates, int) and (isinstance(max_updates, float) and not max_updates.is_integer()):
+            warnings.warn(f"Max_updates is not an integer. Rounding to integer.")
+        return max_updates
+
