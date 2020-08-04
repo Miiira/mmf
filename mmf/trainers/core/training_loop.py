@@ -3,6 +3,7 @@
 import gc
 import logging
 import math
+import warnings
 from abc import ABC
 from typing import Any, Dict
 
@@ -157,14 +158,16 @@ class TrainerTrainingLoopMixin(ABC):
         if max_epochs is not None and max_updates is not None:
             max_updates = min(max_epochs * train_data_length, max_updates)
         elif max_epochs is None and max_updates is None:
-            warnings.warn(f"Neither of max_updates nor max_epochs was specified. Setting them to math.inf.")
+            warnings.warn(f"Neither of max_updates nor max_epochs was specified. Setting max_updates to math.inf.")
             max_updates = math.inf
         elif max_updates is None:
             max_updates = max_epochs * train_data_length
         else:
             pass
 
-        if not isinstance(max_updates, int) and (isinstance(max_updates, float) and not max_updates.is_integer()):
+        if (not isinstance(max_updates, int) and
+            (isinstance(max_updates, float) and not max_updates.is_integer()) and
+            max_updates != math.inf):
             warnings.warn(f"Max_updates is not an integer. Rounding to integer.")
         return max_updates
 
